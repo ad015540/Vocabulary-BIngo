@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bingo Card Generator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.1.0/docx.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+    textarea, input, select, button {
+      margin-top: .5rem;
+      margin-bottom: 1rem;
+      width: 100%;
+    }
+    button {
+      padding: 0.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .grid {
+      display: grid;
+      gap: 4px;
+      margin-top: 1rem;
+    }
+    .cell {
+      border: 1px solid #444;
+      height: 100px;
+      display: flex;
+      flex-direction: column;
+      padding: 4px;
+      font-size: 0.8rem;
+    }
+    .word {
+      font-weight: bold;
+      text-align: left;
+      margin-bottom: 4px;
+    }
+    .free {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Bingo Card Generator</h1>
+
+  <label>Card Title:</label>
+  <input id="cardTitle" type="text" placeholder="Enter Bingo Title (e.g. Vocabulary Bingo)" value="Vocabulary Bingo">
+
+  <label>Grid Size:</label>
+  <select id="gridSize">
+    <option value="3">3 x 3</option>
+    <option value="4">4 x 4</option>
+    <option value="5" selected>5 x 5</option>
+  </select>
+
+  <label>Vocabulary List (one word per line):</label>
+  <textarea id="vocabList" rows="10" placeholder="Type or paste your words here...">photosynthesis
+Anthropology
+Archeology
+Fossil
+Paleolithic Age
+Neolithic Revolution
+Domestication
+Civilization
+Bronze Age
+</textarea>
+
+  <label><input type="checkbox" id="freeSpace"> Include Free Space (center square if odd grid)</label><br>
+  
+  <button onclick="generateCard()">Shuffle Again</button>
+  <button onclick="downloadDocx()">Download as Word Doc</button>
+
+  <h2>Preview:</h2>
+  <div id="cardTitlePreview"></div>
+  <div id="bingoCard" class="grid"></div>
+
+<script>
+let currentWords = [];
+let titleText = "";
+let currentSize = 5;
+
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
+function generateCard() {
+  titleText = document.getElementById("cardTitle").value || "Bingo";
+  currentSize = parseInt(document.getElementById("gridSize").value, 10);
+
+  const vocab = document.getElementById("vocabList").value
+    .split("\n")
+    .map(w => w.trim())
+    .filter(w => w.length > 0);
+  shuffle(vocab);
+
+  let needed = currentSize * currentSize;
+  let words = vocab.slice(0, needed);
+  const includeFree = document.getElementById("freeSpace").checked;
+
+  if (includeFree && currentSize % 2 === 1) {
+    let centerIndex = Math.floor(needed / 2);
+    words[centerIndex] = "FREE SPACE";
+  }
+
+  currentWords = words;
+
+  // Display preview
+  document.getElementById("cardTitlePreview").innerHTML = "<h3>" + titleText + "</h3>";
+  const grid = document.getElementById("bingoCard");
+  grid.innerHTML = "";
+  grid.style.gridTemplateColumns = `repeat(${currentSize}, 1fr)`;
+
+  for (let i = 0; i < needed; i++) {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    if (words[i] === "FREE SPACE") {
+      cell.classList.add("free");
+      cell.innerText = "FREE SPACE";
+    } else {
+      const wordDiv = document.createElement("div");
+      wordDiv.className = "word";
+      wordDiv.innerText = words[i];
+      const spaceDiv = document.createElement("div");
+      spaceDiv.style.flexGrow = "1";
+      cell.appendChild(wordDiv);
+      cell.appendChild(spaceDiv);
+    }
+    grid.appendChild(cell);
+  }
+}
+
+async function downloadDocx() {
+  if (!currentWords.length) {
+    alert("Generate a card first!");
+    return;
+  }
+  const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType, TextRun } = docx;
+
+  let rows = [];
+  for (let r = 0; r < currentSize; r++) {
+    let cells = [];
+    for (let c = 0; c < currentSize; c++) {
+      const word = currentWords[r * currentSize + c];
+      if (word === "FREE SPACE") {
+        cells.push(new TableCell({
+          children: [new Paragraph({ text: "FREE SPACE", alignment: AlignmentType.CENTER })],
+          width: { size: 100 / currentSize, type: WidthType.PERCENTAGE }
+        }));
+      } else {
+        cells.push(new TableCell({
+          children: [
+            new Paragraph({ children: [new TextRun({ text: word, bold: true })] }),
+            new Paragraph({ text: "" }) // space for definitions
+          ],
+          width: { size: 100 / currentSize, type: WidthType.PERCENTAGE }
+        }));
+      }
+    }
+    rows.push(new TableRow({ children: cells }));
+  }
+
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({ text: titleText, heading: "Heading1", alignment: AlignmentType.CENTER }),
+        new Table({ rows })
+      ]
+    }]
+  });
+
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, "bingo_card.docx");
+}
+// Auto-generate on page load
+window.onload = generateCard;
+</script>
+</body>
+</html>
